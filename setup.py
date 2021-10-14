@@ -7,7 +7,7 @@ with open("./README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="soraha_utils",
-    version="0.0.2",
+    version="0.0.3",
     author="shiying",
     author_email="839778960@qq.com",
     description="soraha_utils",

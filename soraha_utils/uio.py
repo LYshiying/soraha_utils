@@ -1,55 +1,53 @@
-import httpx
 import ujson
 import aiofiles
-import requests
 from uuid import uuid4
 from typing import Any, AnyStr, Optional, Union, IO
 
 from .uiexcep import *
-from .uilog import set_logger
-from .uiutils import sync_to_async
-
-
-logger = set_logger()
+from .uitry import retry
+from .uilog import logger
+from .uiclient import sync_uiclient, async_uiclient
 
 
 class uio:
-    def __init__(self) -> None:
-        self.headers = {
-            "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-            "accept-encoding": "gzip, deflate, br",
-            "accept-language": "zh-CN,zh-HK;q=0.9,zh;q=0.8,en;q=0.7",
-            "cache-control": "max-age=0",
-            "sec-ch-ua": """Chromium";v="94", "Google Chrome";v="94", ";Not A Brand";v="99""",
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": "Windows",
-            "sec-fetch-dest": "document",
-            "sec-fetch-mode": "navigate",
-            "sec-fetch-site": "cross-site",
-            "sec-fetch-user": "?1",
-            "upgrade-insecure-requests": "1",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/94.0.4606.81 Safari/537.36",
-        }
+    """请不用理会这个
+
+    Returns:
+        ?return什么啊: 啊这
+    """
 
     @staticmethod
-    def sync_dump(obj: Any, fp: Optional[IO[AnyStr]]):
+    def sync_dump(obj: Any, fp: Optional[IO[AnyStr]]) -> None:
+        """同步下的json_dump,单独提出来是因为ensure_ascii跟indent太烦了！
+
+        Args:
+            obj (Any): json格式文本
+            fp (Optional[IO[AnyStr]]): 同步下的fileIO
+        """
         return ujson.dump(obj, fp, indent=4, ensure_ascii=False)
 
     @staticmethod
-    @sync_to_async
-    def async_dump(obj: Any, fp: Optional[IO[AnyStr]]):
+    async def async_dump(obj: Any, fp: Optional[IO[AnyStr]]):
+        """异步下的json_dump,单独提出来是因为ensure_ascii跟indent太烦了！
+
+        Args:
+            obj (Any): json格式文本
+            fp (Optional[IO[AnyStr]]): asyncfiles下的fileIO
+        """
         return ujson.dump(obj, fp, indent=4, ensure_ascii=False)
 
 
 class sync_uio(uio):
     def __init__(self) -> None:
+        """emmmmm"""
         super().__init__()
 
+    @retry(logger=logger)
     def save_file(
         self,
+        type: Optional[str],
         fp: Optional[IO[AnyStr]] = None,
         obj: Any = None,
-        type: Optional[str] = None,
         open_type: str = "w",
         encoding: Optional[str] = "utf-8",
         save_path: str = "./res/",
@@ -59,7 +57,8 @@ class sync_uio(uio):
         proxy: Optional[dict] = None,
         timeout: Optional[Union[tuple, int]] = None,
         request_headers: Optional[dict] = None,
-        request_cookies: Optional[str] = None,
+        other_headers: Optional[str] = None,
+        request_json: Optional[Any] = None,
         request_params: Optional[dict] = None,
         request_data: Optional[dict] = None,
     ) -> list[bool, Optional[str]]:
@@ -69,10 +68,11 @@ class sync_uio(uio):
         3.提供dict,保存json到提供路径或是fileIO
         4.提供obj及后缀名,写入到提供路径或是fileIO
         除此之外(例如需要post什么的)请自己动手丰衣足食！羽衣已经累坏了
+
         Args:
+            type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"].
             fp (Optional[IO[AnyStr]], optional): fileIO,有需要保存到特定文件时提供,或者提供路径+文件名+文件后缀. Defaults to None.
             obj (Any, optional): 任意需要保存的东西[json|dict|text|Any]. Defaults to None.
-            type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"]. Defaults to None.
             open_type (str, optional): open文件的方法,一般不用理会. Defaults to "w".
             encoding (Optional[str], optional): open文件时的encoding,一般不用改. Defaults to "utf-8".
             save_path (str, optional): 保存的路径. Defaults to "./res/".
@@ -82,7 +82,8 @@ class sync_uio(uio):
             proxy (Optional[dict], optional): url存在时有效,requests接受的代理. Defaults to None.
             timeout (Optional[Union[tuple, int]], optional): url存在时有效,requests接受的timeout. Defaults to None.
             request_headers (Optional[dict], optional): url存在时有效,默认为中文的windows电脑,传入cookie请使用request_cookies. Defaults to None.
-            request_cookies (Optional[str], url存在时有效,传入cookies加入到headers,如果有特殊需求请直接传入request_headers. Defaults to None.
+            other_headers (Optional[str]): url存在时有效,传入任意headers的键值对,请求时会加进去. Defaults to None.
+            request_json (Optional[AnyStr]): url存在时有效,post的json. Defaults to None.
             request_params (Optional[dict], optional): url存在时有效,请求的params. Defaults to None.
             request_data (Optional[dict], optional): url存在时有效,请求的data. Defaults to None.
         Returns:
@@ -119,20 +120,16 @@ class sync_uio(uio):
                         return [True, save_path + save_name + file_extension]
             elif type.lower() == "url_image" or "url_json":
                 save_type = "image" if type.lower() == "url_image" else "json"
-                if request_cookies:
-                    self.headers["cookies"] = request_cookies
-                logger.debug(
-                    f"开始连接至:{url},代理:{proxy},参数:{request_params},数据:{request_data}"
-                )
-                res = requests.get(
-                    url,
-                    proxies=proxy,
-                    timeout=timeout,
-                    headers=request_headers if request_headers else self.headers,
-                    data=request_data,
-                    params=request_params,
-                )
-                logger.debug(f"成功连接,状态码:{res.status_code}")
+                with sync_uiclient(
+                    proxy,
+                    timeout,
+                    request_headers,
+                    other_headers,
+                    request_json,
+                    request_params,
+                    request_data,
+                ) as client:
+                    res = client.uiget(url)
                 if save_type == "json":
                     if fp:
                         self.sync_dump(res.json(), fp)
@@ -183,11 +180,12 @@ class async_uio(uio):
     def __init__(self) -> None:
         super().__init__()
 
+    @retry(logger=logger)
     async def save_file(
         self,
+        type: Optional[str],
         fp: Optional[IO[AnyStr]] = None,
         obj: Any = None,
-        type: Optional[str] = None,
         open_type: str = "w",
         encoding: Optional[str] = "utf-8",
         save_path: str = "./res/",
@@ -197,7 +195,8 @@ class async_uio(uio):
         proxy: Optional[dict] = None,
         timeout: Optional[Union[tuple, int]] = None,
         request_headers: Optional[dict] = None,
-        request_cookies: Optional[str] = None,
+        other_headers: Optional[str] = None,
+        request_json: Optional[AnyStr] = None,
         request_params: Optional[dict] = None,
         request_data: Optional[dict] = None,
     ) -> list[bool, Optional[str]]:
@@ -208,9 +207,9 @@ class async_uio(uio):
         4.提供obj及后缀名,写入到提供路径或是fileIO
         除此之外(例如需要post什么的)请自己动手丰衣足食！羽衣已经累坏了
         Args:
+            type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"]
             fp (Optional[IO[AnyStr]], optional): fileIO,有需要保存到特定文件时提供,或者提供路径+文件名+文件后缀. Defaults to None.
             obj (Any, optional): 任意需要保存的东西[json|dict|text|Any]. Defaults to None.
-            type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"]. Defaults to None.
             open_type (str, optional): open文件的方法,一般不用理会. Defaults to "w".
             encoding (Optional[str], optional): open文件时的encoding,一般不用改. Defaults to "utf-8".
             save_path (str, optional): 保存的路径. Defaults to "./res/".
@@ -220,7 +219,8 @@ class async_uio(uio):
             proxy (Optional[dict], optional): url存在时有效,requests接受的代理. Defaults to None.
             timeout (Optional[Union[tuple, int]], optional): url存在时有效,requests接受的timeout. Defaults to None.
             request_headers (Optional[dict], optional): url存在时有效,默认为中文的windows电脑,传入cookie请使用request_cookies. Defaults to None.
-            request_cookies (Optional[str], url存在时有效,传入cookies加入到headers,如果有特殊需求请直接传入request_headers. Defaults to None.
+            other_headers (Optional[str]): url存在时有效,传入任意headers的键值对,请求时会加进去. Defaults to None.
+            request_json (Optional[AnyStr]): url存在时有效,post的json. Defaults to None.
             request_params (Optional[dict], optional): url存在时有效,请求的params. Defaults to None.
             request_data (Optional[dict], optional): url存在时有效,请求的data. Defaults to None.
         Returns:
@@ -257,18 +257,16 @@ class async_uio(uio):
                         return [True, save_path + save_name + file_extension]
             elif type.lower() == "url_image" or "url_json":
                 save_type = "image" if type.lower() == "url_image" else "json"
-                if request_cookies:
-                    self.headers["cookies"] = request_cookies
-                async with httpx.AsyncClient(proxies=proxy, timeout=timeout) as client:
-                    logger.debug(
-                        f"开始连接至:{url},代理:{proxy},参数:{request_params},数据:{request_data}"
-                    )
-                    res = await client.get(
-                        headers=request_headers if request_headers else self.headers,
-                        data=request_data,
-                        params=request_params,
-                    )
-                    logger.debug(f"成功连接,状态码:{res.status_code}")
+                async with async_uiclient(
+                    proxy,
+                    timeout,
+                    request_headers,
+                    other_headers,
+                    request_json,
+                    request_params,
+                    request_data,
+                ) as client:
+                    res = await client.uiget(url)
                 if save_type == "json":
                     if fp:
                         await self.async_dump(res.json(), fp)
@@ -313,3 +311,4 @@ class async_uio(uio):
             raise
         except Exception as e:
             logger.warning(f"文件保存失败!捕获到错误:{e}")
+            raise

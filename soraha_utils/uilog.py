@@ -18,10 +18,13 @@ def set_logger(
     file_catch: bool = True,
     file_level: str = "INFO",
 ) -> logger:
-    """是对loguru的logger进行的二次封装,大概是因为平时的logger不太适合自己,索性造了一个,是一个很可爱的logger呢。
-    总之就是这个样子啦！配色什么的都是精心调整过的样子,
-    话说回来我拿着别人的轮子来造自己的轮子真的没问题吗，看上去很容易被骂呢。
-    嘛，那种事情怎么样都好啦。(笑)
+    """loguru的二次封装。
+    强调了开箱即用感。
+    因为很不满意loguru的默认logger,所以自己再造了一个呢。
+    大概就是那种你行你上的感觉吧。(笑)
+    抱着这样的想法写出了这个函数。
+    嘛,不过那种事情怎么样都好啦。
+    当然,头发最后由工作人员好好的打扫掉了。
 
     Args:
         format (Optional[str], optional): loguru的format格式,默认为:`"<g>{time:YYYY-MM-DD HH:mm:ss}</g> | <m>{module}:{function}</m> | <lvl>{level}</lvl> | <lvl>{message}</lvl>"`. Defaults to None.
@@ -67,3 +70,6 @@ def set_logger(
         )
 
     return logger
+
+
+logger = set_logger()
