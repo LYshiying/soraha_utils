@@ -1,5 +1,7 @@
+import inspect
 from functools import wraps
 from typing import Callable, Union
+from asyncio import iscoroutinefunction
 
 from .uilog import logger
 
@@ -18,13 +20,9 @@ def retry(
     abc()
     >>> 1970-1-1 00:00:00 | uitry:retrying | INFO | An exception occurred: division by zero, retry the function(abc) again (Remaining retries:1)
     Traceback (most recent call last):
-      File "e:\project_for_program\Python\soraha_utils\soraha_utils\uitry.py", line 57, in <module>
-        abc()
-      File "e:\project_for_program\Python\soraha_utils\soraha_utils\uitry.py", line 38, in retrying
-        return func(*args, **kw)
-      File "e:\project_for_program\Python\soraha_utils\soraha_utils\uitry.py", line 54, in abc
-        return 1 / 0
+      xxxx
     ZeroDivisionError: division by zero
+    ```
 
     Args:
         excep (tuple, Exception): 需要捕获的exception,单个excep或者传入tuple. Defaults to Exception.
@@ -33,11 +31,25 @@ def retry(
         logger (logger, optional): 传入logger记录数据,要不然就用羽衣的默认logger！. Defaults to logger.
 
     Returns:
-        Callable: 把装饰器丢回给你！哈哈！没想到吧！
+        Callable: 把装饰器丢回给你！哈哈！没想到吧!
     """
     excep = (excep,) if isinstance(excep, Exception) else excep
 
     def deco(func):
+        @wraps(func)
+        async def retrying_async(*args, **kw):
+            nonlocal retry_times
+            while retry_times:
+                try:
+                    return await func(*args, **kw)
+                except excep as e:
+                    logger.info(
+                        f"An exception occurred: {e}, retry the function({func.__name__}) again (Remaining retries:{retry_times})"
+                    )
+                    retry_times -= 1
+                    if not retry_times:
+                        raise
+
         @wraps(func)
         def retrying(*args, **kw):
             nonlocal retry_times
@@ -52,6 +64,6 @@ def retry(
                     if not retry_times:
                         raise
 
-        return retrying
+        return retrying_async if iscoroutinefunction(func) else retrying
 
     return deco

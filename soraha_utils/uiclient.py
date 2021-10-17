@@ -69,7 +69,7 @@ class sync_uiclient:
         pass
 
     @retry(logger=logger)
-    def uiget(self, url: str) -> requests.get():
+    def uiget(self, url: str) -> requests.get:
         """get的请求函数,使用的是requests
 
         Args:
@@ -182,14 +182,14 @@ class async_uiclient:
         pass
 
     @retry(logger=logger)
-    async def uiget(self, url: str):
+    async def uiget(self, url: str) -> httpx.AsyncClient.get:
         """get的请求函数,使用的是httpx
 
         Args:
             url (str): 需要请求的url
 
         Returns:
-            httpx.AsyncClient().get(): 返回请求成功后的连接
+            httpx.AsyncClient.get: 返回请求成功后的连接
         """
         logger.debug(
             f"开始连接至:{url},方法:GET,代理:{self.proxy},参数:{self.params},数据:{self.data}"
@@ -207,14 +207,14 @@ class async_uiclient:
         return res
 
     @retry(logger=logger)
-    async def uipost(self, url: str):
+    async def uipost(self, url: str) -> httpx.AsyncClient.post:
         """post的请求函数,使用的是httpx
 
         Args:
             url (str): 需要请求的url
 
         Returns:
-            httpx.AsyncClient().post(): 返回请求成功后的连接
+            httpx.AsyncClient.post: 返回请求成功后的连接
         """
         logger.debug(
             f"开始连接至:{url},方法:POST,代理:{self.proxy},参数:{self.params},数据:{self.data}"
