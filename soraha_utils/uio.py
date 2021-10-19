@@ -1,8 +1,7 @@
 import ujson
 import aiofiles
-from uuid import uuid4
+from pathlib import Path
 from typing import Any, AnyStr, Optional, Union, IO
-
 from .uiexcep import *
 from .uitry import retry
 from .uilog import logger
@@ -42,17 +41,35 @@ class sync_uio(uio):
         """emmmmm"""
         super().__init__()
 
+    def __open_file(
+        self,
+        fp: Optional[IO[AnyStr]] = None,
+        file_path: str = None,
+        open_type: str = "w",
+        encoding: Optional[str] = "utf-8",
+    ) -> IO:
+        if fp:
+            return fp
+        try:
+            return Path(file_path).open(encoding=encoding, mode=open_type)
+        except FileNotFoundError:
+            parts = Path(file_path).parts
+            for i in parts:
+                if i == parts[-1]:
+                    Path(file_path).touch()
+                    break
+                Path(i).mkdir(exist_ok=True)
+            return Path(file_path).open(encoding=encoding, mode=open_type)
+
     @retry(logger=logger)
     def save_file(
         self,
         type: Optional[str],
+        save_path: Optional[str] = None,
         fp: Optional[IO[AnyStr]] = None,
         obj: Any = None,
         open_type: str = "w",
         encoding: Optional[str] = "utf-8",
-        save_path: str = "./res/",
-        save_name: str = str(uuid4())[-12:],
-        file_extension: str = None,
         url: Optional[str] = None,
         proxy: Optional[dict] = None,
         timeout: Optional[Union[tuple, int]] = None,
@@ -71,13 +88,11 @@ class sync_uio(uio):
 
         Args:
             type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"].
-            fp (Optional[IO[AnyStr]], optional): fileIO,有需要保存到特定文件时提供,或者提供路径+文件名+文件后缀. Defaults to None.
+            save_path (str, optional): 保存的路径,请与fp二选一传入.
+            fp (Optional[IO[AnyStr]], optional): fileIO,有需要保存到特定文件时提供,或者提供路径. Defaults to None.
             obj (Any, optional): 任意需要保存的东西[json|dict|text|Any]. Defaults to None.
             open_type (str, optional): open文件的方法,一般不用理会. Defaults to "w".
             encoding (Optional[str], optional): open文件时的encoding,一般不用改. Defaults to "utf-8".
-            save_path (str, optional): 保存的路径. Defaults to "./res/".
-            save_name (str, optional): 保存的文件名. Defaults to str(uuid4())[-12:].
-            file_extension (str, optional): 如果type=="other",传入文件后缀,否则为空后缀. Defaults to None.
             url (Optional[str], optional): 需要请求url获取数据时,传入url. Defaults to None.
             proxy (Optional[dict], optional): url存在时有效,requests接受的代理. Defaults to None.
             timeout (Optional[Union[tuple, int]], optional): url存在时有效,requests接受的timeout. Defaults to None.
@@ -90,36 +105,23 @@ class sync_uio(uio):
             list[bool,Optional[str]]: [成功或失败,保存的文件路径(传入fileIO或出错时返回为None)]
         """
         try:
+            if not (save_path or fp):
+                raise ValueError("没有给与fp或路径参数,请任选一传入！")
+            fp_normal = self.__open_file(fp, save_path, open_type, encoding)
+            fp_bytes = self.__open_file(fp, save_path, "wb", encoding=None)
             if type.lower() == "json":
-                file_extension = ".json"
-                if fp:
+                if obj:
                     self.sync_dump(obj, fp)
-                    return [True, None]
                 else:
-                    with open(
-                        save_path + save_name + file_extension,
-                        open_type,
-                        encoding=encoding,
-                    ) as f:
-                        self.sync_dump(obj, f)
-                        return [True, save_path + save_name + file_extension]
-            elif type.lower() == "image":
-                file_extension = ".png"
-                open_type = "wb"
-                encoding = None
-                if fp:
-                    fp.write(obj)
-                    return [True, None]
+                    raise ValueError(f"检查到type为:json(实际传入:{type}),缺少obj参数")
+                return [True, save_path]
+            elif type.lower == "image":
+                if obj:
+                    fp_bytes.write(obj)
                 else:
-                    with open(
-                        save_path + save_name + file_extension,
-                        open_type,
-                        encoding=encoding,
-                    ) as f:
-                        f.write(obj)
-                        return [True, save_path + save_name + file_extension]
-            elif type.lower() == "url_image" or "url_json":
-                save_type = "image" if type.lower() == "url_image" else "json"
+                    raise ValueError(f"检查到type为:image(实际传入:{type}),缺少obj参数")
+                return [True, save_path]
+            elif type.lower == "url_iamge" or type.lower() == "url_json":
                 with sync_uiclient(
                     proxy,
                     timeout,
@@ -129,68 +131,58 @@ class sync_uio(uio):
                     request_params,
                     request_data,
                 ) as client:
-                    res = client.uiget(url)
-                if save_type == "json":
-                    if fp:
-                        self.sync_dump(res.json(), fp)
-                        return [True, None]
+                    if url:
+                        res = client.uiget(url)
                     else:
-                        file_extension = ".json"
-                        open_type = "w"
-                        with open(
-                            save_path + save_name + file_extension,
-                            open_type,
-                            encoding=encoding,
-                        ) as f:
-                            self.sync_dump(res.json(), f)
-                            return [True, save_path + save_name + file_extension]
-                else:
-                    if fp:
-                        fp.write(res.content)
-                        return [True, None]
-                    else:
-                        file_extension = ".png"
-                        open_type = "wb"
-                        with open(
-                            save_path + save_name + file_extension, open_type
-                        ) as f:
-                            f.write(res.content)
-                            return [True, save_path + save_name + file_extension]
+                        raise ValueError(f"检查到type为:url_image(实际传入:{type}),缺少url参数")
+                    fp_bytes.write(
+                        res.content
+                    ) if type.lower() == "url_iamge" else fp_normal.write(res.json)
+                    return [True, save_path]
             elif type.lower() == "other":
-                if fp:
-                    fp.write(obj)
-                    return [True, None]
-                else:
-                    with open(
-                        save_path + save_name + file_extension,
-                        open_type,
-                        encoding=encoding,
-                    ) as f:
-                        f.write(obj)
-                        return [True, save_path + save_name + file_extension]
+                fp_normal.write(obj)
             else:
                 raise Uio_MethodNotDefinded
-        except Uio_MethodNotDefinded:
-            raise
         except Exception as e:
-            logger.warning(f"文件保存失败!捕获到错误:{e}")
+            logger.warning(f"文件保存失败: {e}")
+        finally:
+            fp_normal.close()
+            fp_bytes.close()
 
 
 class async_uio(uio):
     def __init__(self) -> None:
         super().__init__()
 
+    async def __open_file(
+        self,
+        fp: Optional[IO[AnyStr]] = None,
+        file_path: str = None,
+        open_type: str = "w",
+        encoding: Optional[str] = "utf-8",
+    ) -> IO:
+        if fp:
+            return fp
+        try:
+            return aiofiles.open(Path(file_path), mode=open_type, encoding=encoding)
+        except FileNotFoundError:
+            parts = Path(file_path).parts
+            for i in parts:
+                if i == parts[-1]:
+                    Path(file_path).touch()
+                    break
+                Path(i).mkdir(exist_ok=True)
+            return aiofiles.open(Path(file_path), encoding=encoding, mode=open_type)
+
     @retry(logger=logger)
     async def save_file(
         self,
         type: Optional[str],
+        save_path: Optional[str] = None,
         fp: Optional[IO[AnyStr]] = None,
         obj: Any = None,
         open_type: str = "w",
         encoding: Optional[str] = "utf-8",
-        save_path: str = "./res/",
-        save_name: str = str(uuid4())[-12:],
-        file_extension: str = None,
         url: Optional[str] = None,
         proxy: Optional[dict] = None,
         timeout: Optional[Union[tuple, int]] = None,
@@ -207,14 +199,12 @@ class async_uio(uio):
         4.提供obj及后缀名,写入到提供路径或是fileIO
         除此之外(例如需要post什么的)请自己动手丰衣足食！羽衣已经累坏了
         Args:
-            type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"]
-            fp (Optional[IO[AnyStr]], optional): fileIO,有需要保存到特定文件时提供,或者提供路径+文件名+文件后缀. Defaults to None.
+            type (Optional[str], optional): ["json"|"url_json"|"image"|"url_image"|"other"].
+            save_path (str, optional): 保存的路径,请与fp二选一传入.
+            fp (Optional[IO[AnyStr]], optional): fileIO,有需要保存到特定文件时提供,或者提供路径. Defaults to None.
             obj (Any, optional): 任意需要保存的东西[json|dict|text|Any]. Defaults to None.
             open_type (str, optional): open文件的方法,一般不用理会. Defaults to "w".
             encoding (Optional[str], optional): open文件时的encoding,一般不用改. Defaults to "utf-8".
-            save_path (str, optional): 保存的路径. Defaults to "./res/".
-            save_name (str, optional): 保存的文件名. Defaults to str(uuid4())[-12:].
-            file_extension (str, optional): 如果type=="other",传入文件后缀,否则为空后缀. Defaults to None.
             url (Optional[str], optional): 需要请求url获取数据时,传入url. Defaults to None.
             proxy (Optional[dict], optional): url存在时有效,requests接受的代理. Defaults to None.
             timeout (Optional[Union[tuple, int]], optional): url存在时有效,requests接受的timeout. Defaults to None.
@@ -227,36 +217,23 @@ class async_uio(uio):
             list[bool,Optional[str]]: [成功或失败,保存的文件路径(传入fileIO或出错时返回为None)]
         """
         try:
+            if not (save_path or fp):
+                raise ValueError("没有给与fp或路径参数,请任选一传入！")
+            fp_normal = self.__open_file(fp, save_path, open_type, encoding)
+            fp_bytes = self.__open_file(fp, save_path, "wb", encoding=None)
             if type.lower() == "json":
-                file_extension = ".json"
-                if fp:
+                if obj:
                     await self.async_dump(obj, fp)
-                    return [True, None]
                 else:
-                    async with aiofiles.open(
-                        save_path + save_name + file_extension,
-                        open_type,
-                        encoding=encoding,
-                    ) as f:
-                        await self.async_dump(obj, f)
-                        return [True, save_path + save_name + file_extension]
-            elif type.lower() == "image":
-                file_extension = ".png"
-                open_type = "wb"
-                encoding = None
-                if fp:
-                    await fp.write(obj)
-                    return [True, None]
+                    raise ValueError(f"检查到type为:json(实际传入:{type}),缺少obj参数")
+                return [True, save_path]
+            elif type.lower == "image":
+                if obj:
+                    await fp_bytes.write(obj)
                 else:
-                    async with aiofiles.open(
-                        save_path + save_name + file_extension,
-                        open_type,
-                        encoding=encoding,
-                    ) as f:
-                        await f.write(obj)
-                        return [True, save_path + save_name + file_extension]
-            elif type.lower() == "url_image" or "url_json":
-                save_type = "image" if type.lower() == "url_image" else "json"
+                    raise ValueError(f"检查到type为:image(实际传入:{type}),缺少obj参数")
+                return [True, save_path]
+            elif type.lower == "url_iamge" or type.lower() == "url_json":
                 async with async_uiclient(
                     proxy,
                     timeout,
@@ -266,49 +243,22 @@ class async_uio(uio):
                     request_params,
                     request_data,
                 ) as client:
-                    res = await client.uiget(url)
-                if save_type == "json":
-                    if fp:
-                        await self.async_dump(res.json(), fp)
-                        return [True, None]
+                    if url:
+                        res = await client.uiget(url)
                     else:
-                        file_extension = ".json"
-                        open_type = "w"
-                        async with aiofiles.open(
-                            save_path + save_name + file_extension,
-                            open_type,
-                            encoding=encoding,
-                        ) as f:
-                            await self.async_dump(res.json(), f)
-                            return [True, save_path + save_name + file_extension]
-                else:
-                    if fp:
-                        await fp.write(res.content)
-                        return [True, None]
-                    else:
-                        file_extension = ".png"
-                        open_type = "wb"
-                        async with aiofiles.open(
-                            save_path + save_name + file_extension, open_type
-                        ) as f:
-                            await f.write(res.content)
-                            return [True, save_path + save_name + file_extension]
+                        raise ValueError(f"检查到type为:url_image(实际传入:{type}),缺少url参数")
+                    await fp_bytes.write(
+                        res.content
+                    ) if type.lower() == "url_iamge" else await fp_normal.write(
+                        res.json
+                    )
+                    return [True, save_path]
             elif type.lower() == "other":
-                if fp:
-                    await fp.write(obj)
-                    return [True, None]
-                else:
-                    async with aiofiles.open(
-                        save_path + save_name + file_extension,
-                        open_type,
-                        encoding=encoding,
-                    ) as f:
-                        await f.write(obj)
-                        return [True, save_path + save_name + file_extension]
+                await fp_normal.write(obj)
             else:
                 raise Uio_MethodNotDefinded
-        except Uio_MethodNotDefinded:
-            raise
         except Exception as e:
-            logger.warning(f"文件保存失败!捕获到错误:{e}")
-            raise
+            logger.warning(f"文件保存失败: {e}")
+        finally:
+            fp_normal.close()
+            fp_bytes.close()
