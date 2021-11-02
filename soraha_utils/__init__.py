@@ -18,7 +18,7 @@ __all__ = [
     "retry",
     "sync_to_async",
 ]
-__version__ = "0.0.7"
+__version__ = "0.0.9"
 
 sync_with_hook = hook_manager().sync_with_hook
 async_with_hook = hook_manager().async_with_hook

@@ -115,13 +115,13 @@ class sync_uio(uio):
                 else:
                     raise ValueError(f"检查到type为:json(实际传入:{type}),缺少obj参数")
                 return [True, save_path]
-            elif type.lower == "image":
+            elif type.lower() == "image":
                 if obj:
                     fp_bytes.write(obj)
                 else:
                     raise ValueError(f"检查到type为:image(实际传入:{type}),缺少obj参数")
                 return [True, save_path]
-            elif type.lower == "url_iamge" or type.lower() == "url_json":
+            elif type.lower() == "url_image" or type.lower() == "url_json":
                 with sync_uiclient(
                     proxy,
                     timeout,
@@ -137,7 +137,7 @@ class sync_uio(uio):
                         raise ValueError(f"检查到type为:url_image(实际传入:{type}),缺少url参数")
                     fp_bytes.write(
                         res.content
-                    ) if type.lower() == "url_iamge" else fp_normal.write(res.json)
+                    ) if type.lower() == "url_image" else fp_normal.write(res.json)
                     return [True, save_path]
             elif type.lower() == "other":
                 fp_normal.write(obj)
@@ -227,13 +227,13 @@ class async_uio(uio):
                 else:
                     raise ValueError(f"检查到type为:json(实际传入:{type}),缺少obj参数")
                 return [True, save_path]
-            elif type.lower == "image":
+            elif type.lower() == "image":
                 if obj:
                     await fp_bytes.write(obj)
                 else:
                     raise ValueError(f"检查到type为:image(实际传入:{type}),缺少obj参数")
                 return [True, save_path]
-            elif type.lower == "url_iamge" or type.lower() == "url_json":
+            elif type.lower() == "url_image" or type.lower() == "url_json":
                 async with async_uiclient(
                     proxy,
                     timeout,
@@ -249,7 +249,7 @@ class async_uio(uio):
                         raise ValueError(f"检查到type为:url_image(实际传入:{type}),缺少url参数")
                     await fp_bytes.write(
                         res.content
-                    ) if type.lower() == "url_iamge" else await fp_normal.write(
+                    ) if type.lower() == "url_image" else await fp_normal.write(
                         res.json
                     )
                     return [True, save_path]
