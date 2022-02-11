@@ -2,7 +2,7 @@ from .uihook import hook_manager
 from .uilog import set_logger, logger
 from .uio import sync_uio, async_uio
 from .uitry import retry
-from .uiutils import sync_to_async
+from .utils.uiutils import sync_to_async
 from .uiclient import sync_uiclient, async_uiclient
 
 
@@ -18,7 +18,7 @@ __all__ = [
     "retry",
     "sync_to_async",
 ]
-__version__ = "0.0.9"
+__version__ = "0.0.16"
 
 sync_with_hook = hook_manager().sync_with_hook
 async_with_hook = hook_manager().async_with_hook

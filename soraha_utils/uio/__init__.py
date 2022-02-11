@@ -1,11 +1,10 @@
 import ujson
-import aiofiles
 from pathlib import Path
 from typing import Any, AnyStr, Optional, Union, IO
-from .uiexcep import *
-from .uitry import retry
-from .uilog import logger
-from .uiclient import sync_uiclient, async_uiclient
+from ..utils import *
+from ..uitry import retry
+from ..uilog import logger
+from ..uiclient import sync_uiclient, async_uiclient
 
 
 class uio:
@@ -164,7 +163,7 @@ class async_uio(uio):
         if fp:
             return fp
         try:
-            return aiofiles.open(Path(file_path), mode=open_type, encoding=encoding)
+            return Path(file_path).open(encoding=encoding, mode=open_type)
         except FileNotFoundError:
             parts = Path(file_path).parts
             for i in parts:
@@ -172,7 +171,7 @@ class async_uio(uio):
                     Path(file_path).touch()
                     break
                 Path(i).mkdir(exist_ok=True)
-            return aiofiles.open(Path(file_path), encoding=encoding, mode=open_type)
+            return Path(file_path).open(encoding=encoding, mode=open_type)
 
     @retry(logger=logger)
     async def save_file(
@@ -219,8 +218,8 @@ class async_uio(uio):
         try:
             if not (save_path or fp):
                 raise ValueError("没有给与fp或路径参数,请任选一传入！")
-            fp_normal = self.__open_file(fp, save_path, open_type, encoding)
-            fp_bytes = self.__open_file(fp, save_path, "wb", encoding=None)
+            fp_normal = await self.__open_file(fp, save_path, open_type, encoding)
+            fp_bytes = await self.__open_file(fp, save_path, "wb", encoding=None)
             if type.lower() == "json":
                 if obj:
                     await self.async_dump(obj, fp)
@@ -229,7 +228,7 @@ class async_uio(uio):
                 return [True, save_path]
             elif type.lower() == "image":
                 if obj:
-                    await fp_bytes.write(obj)
+                    fp_bytes.write(obj)
                 else:
                     raise ValueError(f"检查到type为:image(实际传入:{type}),缺少obj参数")
                 return [True, save_path]
@@ -247,14 +246,14 @@ class async_uio(uio):
                         res = await client.uiget(url)
                     else:
                         raise ValueError(f"检查到type为:url_image(实际传入:{type}),缺少url参数")
-                    await fp_bytes.write(
+                    fp_bytes.write(
                         res.content
                     ) if type.lower() == "url_image" else await fp_normal.write(
                         res.json
                     )
                     return [True, save_path]
             elif type.lower() == "other":
-                await fp_normal.write(obj)
+                fp_normal.write(obj)
             else:
                 raise Uio_MethodNotDefinded
         except Exception as e:

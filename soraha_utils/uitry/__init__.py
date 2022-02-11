@@ -2,7 +2,8 @@ from functools import wraps
 from typing import Callable, Union
 from asyncio import iscoroutinefunction
 
-from .uilog import logger
+from ..uilog import logger
+from ..utils import Uitry_END_Trying
 
 
 def retry(
@@ -25,7 +26,6 @@ def retry(
 
     Args:
         excep (tuple, Exception): 需要捕获的exception,单个excep或者传入tuple. Defaults to Exception.
-        beside_excep (tuple, Exception): 不需要捕获的exception,一般用于除了xxx外全部捕获的情况. Defaults to Uitry_NoneExcep.
         retry_times (int, optional): 重试的次数. Defaults to 3.
         logger (logger, optional): 传入logger记录数据,要不然就用羽衣的默认logger！. Defaults to logger.
 
@@ -41,6 +41,9 @@ def retry(
             while retry_times:
                 try:
                     return await func(*args, **kw)
+                except Uitry_END_Trying:
+                    logger.info(f"An exception occurred: {e} end retrying.")
+                    break
                 except excep as e:
                     logger.info(
                         f"An exception occurred: {e}, retry the function({func.__name__}) again (Remaining retries:{retry_times})"
@@ -55,6 +58,9 @@ def retry(
             while retry_times:
                 try:
                     return func(*args, **kw)
+                except Uitry_END_Trying:
+                    logger.info(f"An exception occurred: {e} end retrying.")
+                    break
                 except excep as e:
                     logger.info(
                         f"An exception occurred: {e}, retry the function({func.__name__}) again (Remaining retries:{retry_times})"

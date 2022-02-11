@@ -1,6 +1,6 @@
 from typing import Any, Callable
 
-from .uilog import logger
+from ..uilog import logger
 
 
 class hook_manager:
